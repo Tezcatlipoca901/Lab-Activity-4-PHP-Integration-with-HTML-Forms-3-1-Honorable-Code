@@ -4,11 +4,11 @@
 --  Charset: utf8mb4 / utf8mb4_unicode_ci
 -- =====================================================================
 
-CREATE DATABASE IF NOT EXISTS brewlist
+CREATE DATABASE IF NOT EXISTS task_db
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
 
-USE brewlist;
+USE task_db;
 
 -- ---------------------------------------------------------------------
 --  Table: categories

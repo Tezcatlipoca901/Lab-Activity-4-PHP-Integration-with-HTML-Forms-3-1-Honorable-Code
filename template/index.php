@@ -5,6 +5,7 @@
    ===================================================================== */
 
 session_start();                                   // keep tasks across page reloads
+require_once __DIR__ . '/db.php';                  // MySQL connection ($pdo)
 date_default_timezone_set('Asia/Manila');
 
 /* ---------- Configuration ---------- */

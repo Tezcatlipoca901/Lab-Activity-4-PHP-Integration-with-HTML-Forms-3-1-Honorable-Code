@@ -141,3 +141,54 @@ Then open `http://localhost:8000/template/index.php`.
 - After a successful POST the page redirects (Post/Redirect/Get), so refreshing doesn't resubmit the form.
 - The default category **Others** can't be renamed or deleted.
 - Default categories (School, Personal, Work, Others) are defined at the top of `template/index.php`.
+
+---
+
+## Lab 5 – MySQL migration (in progress)
+
+Refactoring the app from `$_SESSION` storage to MySQL via PDO.
+
+### Done
+- **Environment:** PHP 8.5 with `pdo_mysql`, MariaDB running, `root@localhost` with empty password.
+- **Schema:** `brewlist.sql` imported into the `task_db` database (4 categories + sample tasks).
+- **Order 2 – connection:** `template/db.php` created (PDO, `ERRMODE_EXCEPTION`, `FETCH_ASSOC`, `ATTR_EMULATE_PREPARES => false`, `try/catch` showing `Database Connection Error: ...`). `require_once 'db.php';` added right after `session_start()` in `template/index.php`.
+- Verified: PDO connects, and a wrong password shows a readable error.
+
+### Next
+Order 2 step 5 (deleting the session setup) is **intentionally deferred** so the page keeps loading. Remove these lines together with Order 3:
+- the `$_SESSION['categories'] = $_SESSION['categories'] ?? [...]` block
+- `$_SESSION['tasks'] = $_SESSION['tasks'] ?? []`
+- `$_SESSION['next_id'] = $_SESSION['next_id'] ?? 1`
+
+Remaining orders:
+1. **Order 3 – READ:** replace `$allTasks = $_SESSION['tasks']` with a query that keeps the old array keys; add a fetch-one-by-id helper for `$selected` and `$confirmTask`; remove the session setup above.
+2. **Order 4 – CREATE / UPDATE**
+3. **Order 5 – TOGGLE / DELETE**
+4. **Order 6 – CATEGORIES**
+5. **Order 7 – merge into main**
+6. **Order 8 – QA testing**
+
+### Column mapping (`brewlist.sql` vs. the Lab 5 PDF)
+
+| Lab 5 PDF | `brewlist.sql` |
+|---|---|
+| `task_name` | `title` |
+| `task_description` | `description` |
+| `category` (string) | `category_id` (FK → `categories.id`) |
+| `status` `'pending'`/`'completed'` | `done` `0`/`1` |
+| `categories(name, color)` | `categories(id, name, color, is_default, created_at)` |
+
+Order 3 read query that keeps the existing array keys (`title`, `desc`, `due`, `cat`, `done`):
+
+```sql
+SELECT t.id, t.title, t.description AS `desc`, t.due_date AS due, c.name AS cat, t.done
+FROM tasks t
+JOIN categories c ON c.id = t.category_id
+```
+
+### Run locally
+
+```bash
+php -S 127.0.0.1:8000
+# open http://127.0.0.1:8000/template/index.php
+```

@@ -5,7 +5,7 @@
   font-display: swap;
 }
 
-/* ---------- Themes (Catppuccin) ---------- */
+/* ---------- Themes --------- */
 :root, [data-theme="mocha"] {
   --base:#1e1e2e; --mantle:#181825; --crust:#11111b;
   --text:#cdd6f4; --sub:#a6adc8; --overlay:#6c7086; --s0:#313244; --s1:#45475a;
@@ -639,3 +639,39 @@ label.swatch { cursor: pointer; }
 
 .modal-sec.locked { opacity: .5; }
 .modal-sec.locked * { cursor: not-allowed; }
+
+.detail-head > div { min-width: 0; flex: 1; }
+.detail-head h2 { overflow-wrap: anywhere; word-break: break-word; }
+.status-ring { flex: none; margin-left: 12px; }
+.dialog h2, .dialog p, .dialog p strong { overflow-wrap: anywhere; word-break: break-word; }
+.confirm-row span { min-width: 0; overflow-wrap: anywhere; }
+
+.topbar { min-width: 0; }
+.search-form { flex: 0 1 358px; min-width: 120px; }
+.search-form .search { width: 100%; }
+.brand, .theme-wrap { flex: none; }
+
+.toolbar { height: auto; min-height: 64px; flex-wrap: wrap; gap: 10px 16px; padding: 12px 18px 12px 14px; }
+.tabs { flex-wrap: wrap; gap: 4px; min-width: 0; }
+.sort { margin-left: auto; flex: none; }
+.sort-label, .sort-btn { white-space: nowrap; }
+@media (max-width: 1320px) {
+  .tab, .tab:first-child { padding: 0 14px; font-size: 15px; }
+}
+
+.task-top { flex-wrap: wrap; row-gap: 8px; }
+.task-title { flex: 1 1 180px; min-width: 0; }
+.task-meta { flex-wrap: wrap; row-gap: 6px; }
+
+@media (max-width: 760px) {
+  .toolbar { flex-wrap: nowrap; }
+  .tabs { flex-wrap: nowrap; gap: 0; }
+  .tab, .tab:first-child { min-width: 0; padding: 0 4px; }
+  .task-title { flex: none; }
+  .sort { margin-left: 0; }
+}
+
+/* #13 Tablet: the panel lines up with the task list's left edge */
+@media (max-width: 1060px) and (min-width: 761px) {
+  .panel { margin-left: 24px; }
+}

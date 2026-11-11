@@ -339,7 +339,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'done'  => false,
             ];
             $_SESSION['flash'] = ['type' => 'created', 'title' => $old['title']];
-            header('Location: ' . url(['task' => $id, 'new' => null]));
+            header('Location: ' . url(['task' => null, 'new' => null, 'edit' => null, 'del' => null, 'manage' => null, 'rename' => null, 'delcat' => null]));   // back to the task list, not the details/edit panel
             exit();
         }
     }

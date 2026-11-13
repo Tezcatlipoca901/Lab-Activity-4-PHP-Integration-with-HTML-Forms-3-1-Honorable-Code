@@ -1,10 +1,10 @@
 <?php
 /* =====================================================================
-   Brewlist – Lab Activity 4 (PHP Sessions)
+   Brewlist – Lab Activity 4 (PHP + MySQL)
    Scope: CREATE / READ / UPDATE / DELETE tasks
    ===================================================================== */
 
-session_start();                                   // keep tasks across page reloads
+session_start();                                   // keep flash messages across page reloads
 require_once __DIR__ . '/db.php';                  // MySQL connection ($pdo)
 date_default_timezone_set('Asia/Manila');
 
@@ -14,15 +14,11 @@ const DEFAULT_CATEGORY = 'Others';   // can't be renamed or deleted; tasks of a 
 // Colors offered in the "Manage categories" dialog.
 $palette = ['#cba6f7', '#a6e3a1', '#b794f6', '#6c7086', '#f9e2af', '#89dceb', '#f5c2e7', '#b4befe'];
 
-// Category name => dot/chip color. These are the starting categories; after that they live in
-// $_SESSION['categories'] and are added / renamed / deleted from the "Manage" dialog.
-$_SESSION['categories'] = $_SESSION['categories'] ?? [
-    'School'   => '#cba6f7',
-    'Personal' => '#a6e3a1',
-    'Work'     => '#b794f6',
-    'Others'   => '#6c7086',
-];
-$categories = $_SESSION['categories'];
+$categories = [];
+$categoryStmt = $pdo->query('SELECT name, color FROM categories ORDER BY id');
+foreach ($categoryStmt as $category) {
+    $categories[$category['name']] = $category['color'];
+}
 
 $viewNames = ['all' => 'All tasks', 'today' => 'Today', 'week' => 'This week', 'month' => 'This month', 'year' => 'This year', 'nodue' => 'No due date'];
 $viewIcons = ['all' => 'all-tasks', 'today' => 'today', 'week' => 'week', 'month' => 'month', 'year' => 'year'];   // PNG icons from /assets
@@ -31,10 +27,6 @@ $viewSvgs  = [
     'nodue'   => '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16M9.5 15h5"/>',
 ];
 $sortNames = ['earliest' => 'Earliest first', 'latest' => 'Latest first', 'az' => 'Name A–Z', 'za' => 'Name Z–A'];
-
-/* ---------- Session storage ---------- */
-$_SESSION['tasks']   = $_SESSION['tasks']   ?? [];  // every task lives in $_SESSION['tasks']
-$_SESSION['next_id'] = $_SESSION['next_id'] ?? 1;
 
 /* ---------- Helpers ---------- */
 
@@ -52,6 +44,51 @@ function formatDate(string $date): string
 function plural(int $n, string $word): string
 {
     return $n . ' ' . $word . ($n === 1 ? '' : 's');
+}
+
+// Keep the array shape used by the existing filters and templates while reading from MySQL.
+function fetchTasks(PDO $pdo): array
+{
+    $stmt = $pdo->query(
+        'SELECT t.id, t.title, t.description AS `desc`, t.due_date AS due, '
+        . 'c.name AS cat, t.done '
+        . 'FROM tasks t '
+        . 'JOIN categories c ON c.id = t.category_id '
+        . 'ORDER BY t.id'
+    );
+
+    $tasks = [];
+    foreach ($stmt as $task) {
+        $task['id'] = (int) $task['id'];
+        $task['due'] = $task['due'] ?? '';
+        $task['done'] = (bool) $task['done'];
+        $tasks[$task['id']] = $task;
+    }
+
+    return $tasks;
+}
+
+function fetchTask(PDO $pdo, int $taskId): ?array
+{
+    $stmt = $pdo->prepare(
+        'SELECT t.id, t.title, t.description AS `desc`, t.due_date AS due, '
+        . 'c.name AS cat, t.done '
+        . 'FROM tasks t '
+        . 'JOIN categories c ON c.id = t.category_id '
+        . 'WHERE t.id = :id'
+    );
+    $stmt->execute(['id' => $taskId]);
+    $task = $stmt->fetch();
+
+    if ($task === false) {
+        return null;
+    }
+
+    $task['id'] = (int) $task['id'];
+    $task['due'] = $task['due'] ?? '';
+    $task['done'] = (bool) $task['done'];
+
+    return $task;
 }
 
 // The little status pill: Overdue (red) / Active (amber) / Completed (green)
@@ -350,14 +387,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
    READ  –  decide what the right panel shows, then build the list
    ===================================================================== */
 $selectedId = isset($_GET['task']) ? (int) $_GET['task'] : 0;
-$selected   = $_SESSION['tasks'][$selectedId] ?? null;
+$selected   = fetchTask($pdo, $selectedId);
 $showEdit   = $selected !== null && isset($_GET['edit']) && $_GET['edit'] === '1';
 $showDel    = $selected !== null && isset($_GET['del'])  && $_GET['del']  === '1';
 $showDetail = $selected !== null && !isset($_GET['new']) && !$showEdit && $_SERVER['REQUEST_METHOD'] !== 'POST';
 
 // Checkbox on a task card: ?confirm=ID opens the "Mark as completed?" popup (not kept by url(), so it goes away on any other link).
 $confirmId   = isset($_GET['confirm']) ? (int) $_GET['confirm'] : 0;
-$confirmTask = $_SESSION['tasks'][$confirmId] ?? null;
+$confirmTask = fetchTask($pdo, $confirmId);
 $showConfirm = $confirmTask !== null && !$showDel && $_SERVER['REQUEST_METHOD'] !== 'POST';
 
 // If we're returning from a failed UPDATE, pre-fill the form with the submitted values
@@ -377,7 +414,7 @@ if ($showEdit && !$errors) {
     ];
 }
 
-$allTasks = $_SESSION['tasks'];
+$allTasks = fetchTasks($pdo);
 
 // Success message left by CREATE / UPDATE / DELETE. Read it once, then remove it so a refresh doesn't show it again.
 $flash = $_SESSION['flash'] ?? null;

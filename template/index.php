@@ -179,11 +179,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'toggle') {
         $tid      = (int) ($_POST['task_id'] ?? 0);
         $fromList = ($_POST['from'] ?? '') === 'list';     // came from the checkbox on a task card (after the confirm popup)
-        if (isset($_SESSION['tasks'][$tid])) {
-            $_SESSION['tasks'][$tid]['done'] = !$_SESSION['tasks'][$tid]['done'];
-            if ($fromList) {
-                $_SESSION['flash'] = ['type' => $_SESSION['tasks'][$tid]['done'] ? 'completed' : 'reopened', 'title' => $_SESSION['tasks'][$tid]['title']];
-            }
+        // Flip the status in MySQL (prepared statement), then SELECT the row to build the flash message.
+        $stmt = $pdo->prepare('UPDATE tasks SET done = IF(done = 0, 1, 0) WHERE id = ?');
+        $stmt->execute([$tid]);
+
+        $stmt = $pdo->prepare('SELECT title, done FROM tasks WHERE id = ?');
+        $stmt->execute([$tid]);
+        $row = $stmt->fetch();
+        if ($row && $fromList) {
+            $_SESSION['flash'] = ['type' => $row['done'] ? 'completed' : 'reopened', 'title' => $row['title']];
         }
         // From the list: stay on the list. From the details panel: keep showing that task.
         header('Location: ' . ($fromList
@@ -195,9 +199,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     /* ---- DELETE ---- */
     if ($action === 'delete') {
         $tid = (int) ($_POST['task_id'] ?? 0);
-        if (isset($_SESSION['tasks'][$tid])) {
-            $_SESSION['flash'] = ['type' => 'deleted', 'title' => $_SESSION['tasks'][$tid]['title']];   // shown once in the success modal
-            unset($_SESSION['tasks'][$tid]);
+        // SELECT the title first (for the flash message), then DELETE the row.
+        $stmt = $pdo->prepare('SELECT title FROM tasks WHERE id = ?');
+        $stmt->execute([$tid]);
+        $row = $stmt->fetch();
+        if ($row) {
+            $_SESSION['flash'] = ['type' => 'deleted', 'title' => $row['title']];   // shown once in the success modal
+            $stmt = $pdo->prepare('DELETE FROM tasks WHERE id = ?');
+            $stmt->execute([$tid]);
         }
         header('Location: ' . url(['task' => null, 'new' => null, 'edit' => null, 'del' => null, 'manage' => null, 'rename' => null, 'delcat' => null]));
         exit();

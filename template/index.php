@@ -314,11 +314,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors['cat'] = 'Please choose a valid category.';
         }
 
-        if (!$errors && isset($_SESSION['tasks'][$tid])) {
-            $_SESSION['tasks'][$tid]['title'] = $old['title'];
-            $_SESSION['tasks'][$tid]['desc']  = $old['desc'];
-            $_SESSION['tasks'][$tid]['due']   = $old['due'];
-            $_SESSION['tasks'][$tid]['cat']   = $old['cat'];
+        if (!$errors && fetchTask($pdo, $tid) !== null) {
+            // Save the changes to MySQL (prepared statement; the category name is turned into its id)
+            $stmt = $pdo->prepare(
+                'UPDATE tasks '
+                . 'SET title = ?, description = ?, due_date = ?, '
+                . 'category_id = (SELECT id FROM categories WHERE name = ?) '
+                . 'WHERE id = ?'
+            );
+            $stmt->execute([
+                $old['title'],
+                $old['desc'],
+                $old['due'] !== '' ? $old['due'] : null,   // empty due date is saved as NULL, not ''
+                $old['cat'],
+                $tid,
+            ]);
             $_SESSION['flash'] = ['type' => 'updated', 'title' => $old['title']];
             header('Location: ' . url(['task' => $tid, 'new' => null, 'edit' => null, 'del' => null, 'manage' => null, 'rename' => null, 'delcat' => null]));
             exit();
@@ -365,17 +375,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors['cat'] = 'Please choose a valid category.';
         }
 
-        // 4. Save in $_SESSION, then redirect (Post/Redirect/Get) so a refresh doesn't resubmit
+        // 4. Save in MySQL, then redirect (Post/Redirect/Get) so a refresh doesn't resubmit
         if (!$errors) {
-            $id = $_SESSION['next_id']++;
-            $_SESSION['tasks'][$id] = [
-                'id'    => $id,
-                'title' => $old['title'],        // stored raw; escaped with e() when displayed
-                'desc'  => $old['desc'],
-                'cat'   => $old['cat'],
-                'due'   => $old['due'],
-                'done'  => false,
-            ];
+            $stmt = $pdo->prepare(
+                'INSERT INTO tasks (title, description, due_date, category_id) '
+                . 'VALUES (?, ?, ?, (SELECT id FROM categories WHERE name = ?))'
+            );
+            $stmt->execute([
+                $old['title'],                              // stored raw; escaped with e() when displayed
+                $old['desc'],
+                $old['due'] !== '' ? $old['due'] : null,    // empty due date is saved as NULL, not ''
+                $old['cat'],
+            ]);
             $_SESSION['flash'] = ['type' => 'created', 'title' => $old['title']];
             header('Location: ' . url(['task' => null, 'new' => null, 'edit' => null, 'del' => null, 'manage' => null, 'rename' => null, 'delcat' => null]));   // back to the task list, not the details/edit panel
             exit();

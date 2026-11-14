@@ -156,14 +156,16 @@ Refactoring the app from `$_SESSION` storage to MySQL via PDO.
 
 ### Done
 - **Order 3 – READ:** tasks and categories are loaded from MySQL, while task rows keep the existing template keys (`title`, `desc`, `due`, `cat`, `done`); selected and confirmation tasks use a fetch-one-by-id helper.
+- **Order 4 – CREATE / UPDATE:** the `create` and `update` blocks now save to MySQL with PDO prepared statements (`?` placeholders) instead of `$_SESSION`. All validation, the flash message, the redirect after success, and the re-render with errors are unchanged. An empty due date is saved as `NULL`, not `''`. Verified in the `tasks` table (see *Verify CREATE / UPDATE* below).
 
 ### Next
 Remaining orders:
-1. **Order 4 – CREATE / UPDATE**
-2. **Order 5 – TOGGLE / DELETE**
-3. **Order 6 – CATEGORIES**
-4. **Order 7 – merge into main**
-5. **Order 8 – QA testing**
+1. **Order 5 – TOGGLE / DELETE**
+2. **Order 6 – CATEGORIES**
+3. **Order 7 – merge into main**
+4. **Order 8 – QA testing**
+
+> Until these are done, toggle (mark completed), delete, and the category actions still use `$_SESSION` and do not change the database.
 
 ### Column mapping (`brewlist.sql` vs. the Lab 5 PDF)
 
@@ -182,6 +184,45 @@ SELECT t.id, t.title, t.description AS `desc`, t.due_date AS due, c.name AS cat,
 FROM tasks t
 JOIN categories c ON c.id = t.category_id
 ```
+
+### CREATE / UPDATE queries (Order 4)
+
+```sql
+-- create
+INSERT INTO tasks (title, description, due_date, category_id)
+VALUES (?, ?, ?, (SELECT id FROM categories WHERE name = ?));
+
+-- update
+UPDATE tasks
+SET title = ?, description = ?, due_date = ?,
+    category_id = (SELECT id FROM categories WHERE name = ?)
+WHERE id = ?;
+```
+
+The `?` placeholders are filled in by PHP when the form is submitted (the values are sent separately from the query, which prevents SQL injection). The form's category name is turned into `category_id` by the subquery.
+
+### Verify CREATE / UPDATE
+
+1. Create a task in the app, then run:
+   ```sql
+   SELECT t.id, t.title, t.description, t.due_date, c.name AS category, t.done
+   FROM task_db.tasks t JOIN task_db.categories c ON c.id = t.category_id
+   ORDER BY t.id;
+   ```
+   The new task should appear as the last row.
+2. Edit that task in the app and run the query again: the same row should show the new values and a new `updated_at`.
+3. Create or edit a task with the due date left empty: `due_date` should be `NULL`.
+4. Submit invalid data (for example a 2-character name): the form shows the errors and no row is added or changed.
+
+### Set up the database
+
+Import the schema once (the file creates `task_db`, its tables, the default categories, and sample tasks):
+
+```bash
+mysql -u root -p < brewlist.sql
+```
+
+Or import `brewlist.sql` with HeidiSQL or phpMyAdmin. To start over, run `DROP DATABASE task_db;` and import again. Connection settings are in `template/db.php` (database `task_db`, user `root`). Don't commit a real password in that file.
 
 ### Run locally
 

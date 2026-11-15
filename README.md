@@ -1,34 +1,36 @@
 # Brewlist
 
-A cozy, simple To-do List web app built with **PHP sessions**, HTML, CSS, and vanilla JavaScript. No database, no frameworks, no extra mumbo jumbo.
+A cozy, simple To-do List web app built with **PHP**, **MySQL (PDO)**, HTML, CSS, and vanilla JavaScript. No frameworks, no extra mumbo jumbo.
 
-Built for **COMP016 – Web Development, Lab Activity 4: PHP Integration with HTML Forms**.
+Built for **COMP016 – Web Development**:
+- **Lab Activity 4:** PHP Integration with HTML Forms (data kept in `$_SESSION`)
+- **Lab Activity 5:** Integrating SQL Databases with PHP (data moved to MySQL with PDO prepared statements)
 
 > **Group:** `HONORABLE_CODE`
-> **Members:** ```
-    DE GUZMAN, CYRUS KENT, MARAV	
-    IGNACIO, RENZO MIGUEL, GALLARDO	
-    LUCBAN, MA. PAMELA	
-    PADILLA, MICHAEL JOSHUA, CAYANAN	
-    RECELLA, RAM MATHEW, FERRER	
-    REYES, MIKAELLA, FRANCISCO	
-    ZULUETA, GIAN CARLO, BASCO```
+> **Members:**
+> - DE GUZMAN, CYRUS KENT, MARAV
+> - IGNACIO, RENZO MIGUEL, GALLARDO
+> - LUCBAN, MA. PAMELA
+> - PADILLA, MICHAEL JOSHUA, CAYANAN
+> - RECELLA, RAM MATHEW, FERRER
+> - REYES, MIKAELLA, FRANCISCO
+> - ZULUETA, GIAN CARLO, BASCO
 
 ---
 
 ## Features
 
-### Core (CRUD with `$_SESSION`)
+### Core (CRUD with MySQL)
 - **Create** a task with a name, description, optional due date, and category
 - **Read** tasks in a list and open any task in the details panel
 - **Update** a task through a pre-filled edit form
 - **Delete** a task with a confirmation dialog
-- **Mark as completed / not completed** from the details panel
+- **Mark as completed / not completed** from the details panel, or from the checkbox on a task card (asks for confirmation first)
 
 ### Organizing tasks
-- **Views:** All tasks, Today, Overdue, This week, This month, This year, and No due date
-- **Categories:** filter by category, and add, rename, or delete categories from the **Manage** dialog (deleting a category moves its tasks to *Others*)
-- **Status tabs:** All, Active, and Completed, each with a live count
+- **Views:** All tasks, Today, This week, This month, This year, and No due date
+- **Categories:** filter by category, and add, rename, or delete categories from the **Manage** dialog (deleting a category moves its tasks to *Others*; *Others* can't be renamed or deleted)
+- **Status tabs:** All, Active, Completed, and Overdue, each with a live count
 - **Search** by task name or description
 - **Sort** by earliest first, latest first, name A–Z, or name Z–A
 
@@ -39,7 +41,7 @@ Built for **COMP016 – Web Development, Lab Activity 4: PHP Integration with HT
   - Red = Overdue
 - **Overdue** is only shown for unfinished tasks whose due date has passed
 - Details-panel status button that is clearly clickable, with a hint
-- **Success modal** after creating, updating, or deleting a task (auto-closes after about 3 seconds)
+- **Success modal** after creating, updating, deleting, or completing a task, and after adding, renaming, or deleting a category (auto-closes after about 3 seconds)
 - Server-side validation with highlighted fields and error messages
 - 4 themes: Latte, Frappé, Macchiato, and Mocha (saved in the browser)
 - Responsive layout for desktop, tablet, and mobile (drawer sidebar and full-screen details panel)
@@ -50,11 +52,11 @@ Built for **COMP016 – Web Development, Lab Activity 4: PHP Integration with HT
 
 | Layer | Used |
 |---|---|
-| Backend | PHP 8+ (sessions, `$_POST`, `$_GET`, `$_SERVER`) |
+| Backend | PHP 8+ (PDO, `$_POST`, `$_GET`, `$_SERVER`; sessions only for the success popups) |
 | Markup | HTML5 (semantic) |
 | Styling | CSS3 (external stylesheet, CSS variables for themes) |
 | Interactivity | Vanilla JavaScript (external script) |
-| Storage | `$_SESSION` only, with no database |
+| Storage | MySQL / MariaDB (`task_db`) through PDO prepared statements |
 
 ---
 
@@ -63,7 +65,8 @@ Built for **COMP016 – Web Development, Lab Activity 4: PHP Integration with HT
 ```
 Brewlist/
 ├── template/
-│   └── index.php      ← Main page: session, form handling + validation, rendering
+│   ├── index.php      ← Main page: form handling + validation, MySQL queries, rendering
+│   └── db.php         ← PDO connection to MySQL ($pdo)
 ├── design/
 │   └── styles.css     ← External stylesheet (layout, themes, components, responsive)
 ├── script/
@@ -71,6 +74,7 @@ Brewlist/
 ├── assets/
 │   ├── icons/         ← PNG icons
 │   └── fonts/         ← Inter font
+├── brewlist.sql       ← Database schema + starting data (task_db)
 └── README.md
 ```
 
@@ -82,12 +86,12 @@ PHP files can't be opened by double-clicking. They need a local server.
 
 ### Option A – Laragon (recommended)
 1. Copy the project folder into `C:\laragon\www\` (for example `C:\laragon\www\Brewlist`).
-2. Open Laragon and click **Start All** (Apache is enough, and MySQL isn't needed).
+2. Open Laragon and click **Start All** (Apache **and MySQL** are both needed). Then import the database (see *Set up the database* below).
 3. Open `http://localhost/Brewlist/template/index.php` in your browser.
 
 ### Option B – XAMPP
 1. Copy the project folder into `C:\xampp\htdocs\`.
-2. Start **Apache** in the XAMPP Control Panel.
+2. Start **Apache** and **MySQL** in the XAMPP Control Panel, then import the database (see *Set up the database* below).
 3. Open `http://localhost/Brewlist/template/index.php`.
 
 ### Option C – PHP built-in server
@@ -110,7 +114,7 @@ Then open `http://localhost:8000/template/index.php`.
 5. **Complete a task:** open it and click the status button (Not completed / Completed).
 6. **Filter and find:** use the sidebar views and categories, the status tabs, the search box, and the sort menu.
 
-> Tasks are stored in the PHP session, so they reset when the session ends (for example when the browser is closed or Apache restarts). This is expected for this lab, which doesn't use a database.
+> Tasks and categories are saved in MySQL, so they stay after you close the browser or clear cookies. Only the one-time success popups use the PHP session.
 
 ---
 
@@ -118,7 +122,7 @@ Then open `http://localhost:8000/template/index.php`.
 
 | Requirement | Where |
 |---|---|
-| `session_start()` and CRUD inside `$_SESSION` | Top of `template/index.php` (`$_SESSION['tasks']`) |
+| `session_start()` (flash popups) and CRUD against MySQL | Top of `template/index.php` and `template/db.php` (`$pdo`) |
 | Self-submitting `method="POST"` form | Create / Edit panel in `template/index.php` |
 | Read `$_POST`, trim, and validate | Create / Update handlers in `template/index.php` |
 | Request handling with `$_SERVER["REQUEST_METHOD"]` | POST handling block in `template/index.php` |
@@ -140,7 +144,7 @@ Then open `http://localhost:8000/template/index.php`.
 - Output is escaped everywhere, so `<script>` typed into a task is shown as plain text.
 - After a successful POST the page redirects (Post/Redirect/Get), so refreshing doesn't resubmit the form.
 - The default category **Others** can't be renamed or deleted.
-- Default categories (School, Personal, Work, Others) are defined at the top of `template/index.php`.
+- The default categories (School, Personal, Work, Others) are inserted by `brewlist.sql`.
 
 ---
 
@@ -152,20 +156,14 @@ Refactoring the app from `$_SESSION` storage to MySQL via PDO.
 - **Environment:** PHP 8.5 with `pdo_mysql`, MariaDB running, `root@localhost` with empty password.
 - **Schema:** `brewlist.sql` imported into the `task_db` database (4 categories + sample tasks).
 - **Order 2 – connection:** `template/db.php` created (PDO, `ERRMODE_EXCEPTION`, `FETCH_ASSOC`, `ATTR_EMULATE_PREPARES => false`, `try/catch` showing `Database Connection Error: ...`). `require_once 'db.php';` added right after `session_start()` in `template/index.php`.
-- Verified: PDO connects, and a wrong password shows a readable error.
-
-### Done
 - **Order 3 – READ:** tasks and categories are loaded from MySQL, while task rows keep the existing template keys (`title`, `desc`, `due`, `cat`, `done`); selected and confirmation tasks use a fetch-one-by-id helper.
-- **Order 4 – CREATE / UPDATE:** the `create` and `update` blocks now save to MySQL with PDO prepared statements (`?` placeholders) instead of `$_SESSION`. All validation, the flash message, the redirect after success, and the re-render with errors are unchanged. An empty due date is saved as `NULL`, not `''`. Verified in the `tasks` table (see *Verify CREATE / UPDATE* below).
+- **Order 4 – CREATE / UPDATE:** the `create` and `update` blocks save to MySQL with PDO prepared statements (`?` placeholders) instead of `$_SESSION`. All validation, the flash message, the redirect after success, and the re-render with errors are unchanged. An empty due date is saved as `NULL`, not `''`.
+- **Order 5 – TOGGLE / DELETE:** toggle flips `done` with a prepared `UPDATE`, then reads the row back for the completed / reopened flash; delete reads the title for the flash, then runs `DELETE`. Both stay POST-only with the id cast to `(int)`.
+- **Order 6 – CATEGORIES:** add, rename, and delete in the Manage dialog now use MySQL (see *CATEGORIES queries* below). The validation, the success popups, and the block on renaming or deleting *Others* are unchanged. No `$_SESSION['categories']` or `$_SESSION['tasks']` is used any more.
 
 ### Next
-Remaining orders:
-1. **Order 5 – TOGGLE / DELETE**
-2. **Order 6 – CATEGORIES**
-3. **Order 7 – merge into main**
-4. **Order 8 – QA testing**
-
-> Until these are done, toggle (mark completed), delete, and the category actions still use `$_SESSION` and do not change the database.
+1. **Order 7 – merge into main**
+2. **Order 8 – QA testing**
 
 ### Column mapping (`brewlist.sql` vs. the Lab 5 PDF)
 
@@ -213,6 +211,33 @@ The `?` placeholders are filled in by PHP when the form is submitted (the values
 2. Edit that task in the app and run the query again: the same row should show the new values and a new `updated_at`.
 3. Create or edit a task with the due date left empty: `due_date` should be `NULL`.
 4. Submit invalid data (for example a 2-character name): the form shows the errors and no row is added or changed.
+
+### CATEGORIES queries (Order 6)
+
+```sql
+-- add
+INSERT INTO categories (name, color) VALUES (?, ?);
+
+-- rename (tasks keep pointing to the same category_id, so they follow the new name)
+UPDATE categories SET name = ? WHERE name = ?;
+
+-- delete (one transaction: move the tasks to Others, then delete the category)
+UPDATE tasks
+SET category_id = (SELECT id FROM categories WHERE name = 'Others')
+WHERE category_id = (SELECT id FROM categories WHERE name = ?);
+
+DELETE FROM categories WHERE name = ?;
+```
+
+The delete uses `beginTransaction()` and `commit()`, and calls `rollBack()` if either statement fails, so a category is never deleted while its tasks are left pointing at it. The PDF's version (`SET category = 'Others'`) assumes the tasks table stores the category name; ours stores `category_id`, so the id is looked up instead.
+
+### Verify CATEGORIES
+
+1. **Add:** add a category in the Manage dialog, then run `SELECT * FROM task_db.categories;`. The new row should be last.
+2. **Duplicate and length:** adding an existing name (any letter case) or a 21-character name shows an error and adds no row.
+3. **Rename:** rename a category that has tasks. The `categories` row changes, and the tasks still show under the new name.
+4. **Delete:** delete a category that has tasks. The row is gone and its tasks now show under *Others*.
+5. **Others:** it has no rename or delete buttons.
 
 ### Set up the database
 

@@ -217,13 +217,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $orig = $action === 'cat_add' ? '' : (string) ($_POST['cat_orig'] ?? '');
         $back = ['manage' => 1, 'rename' => null, 'delcat' => null];   // where to go after success
 
+        /* ---- DELETE: move the category's tasks to "Others", then delete it (one transaction) ---- */
         if ($action === 'cat_delete') {
-            if ($orig !== DEFAULT_CATEGORY && isset($_SESSION['categories'][$orig])) {
-                foreach ($_SESSION['tasks'] as &$t) {                    // move its tasks to "Others"
-                    if ($t['cat'] === $orig) $t['cat'] = DEFAULT_CATEGORY;
+            if ($orig !== DEFAULT_CATEGORY && isset($categories[$orig])) {
+                try {
+                    $pdo->beginTransaction();
+
+                    $stmt = $pdo->prepare(
+                        'UPDATE tasks '
+                        . 'SET category_id = (SELECT id FROM categories WHERE name = ?) '
+                        . 'WHERE category_id = (SELECT id FROM categories WHERE name = ?)'
+                    );
+                    $stmt->execute([DEFAULT_CATEGORY, $orig]);
+
+                    $stmt = $pdo->prepare('DELETE FROM categories WHERE name = ?');
+                    $stmt->execute([$orig]);
+
+                    $pdo->commit();
+                } catch (PDOException $ex) {
+                    if ($pdo->inTransaction()) $pdo->rollBack();     // undo both steps if either failed
+                    throw $ex;
                 }
-                unset($t);
-                unset($_SESSION['categories'][$orig]);
                 $_SESSION['flash'] = ['type' => 'cat_deleted', 'title' => $orig];  // success popup
                 $back = ['manage' => null, 'rename' => null, 'delcat' => null];    // close Manage dialog so flash is visible
                 if (($_GET['cat'] ?? '') === $orig) $back['cat'] = null;  // don't keep filtering by a deleted category
@@ -232,6 +246,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit();
         }
 
+        /* ---- ADD / RENAME: validation (same rules as before, now checked against the database rows) ---- */
         $name  = trim($_POST['cat_name'] ?? '');
         $color = trim($_POST['cat_color'] ?? '');
         $key   = $action === 'cat_add' ? 'add' : 'rename';
@@ -242,7 +257,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (mb_strlen($name) > 20) {
             $msg = 'Category name cannot exceed 20 characters.';
         } else {
-            foreach ($_SESSION['categories'] as $existing => $c) {
+            foreach ($categories as $existing => $c) {            // $categories was loaded from MySQL above
                 if ((string) $existing !== $orig && mb_strtolower((string) $existing) === mb_strtolower($name)) {
                     $msg = 'That category already exists.';
                 }
@@ -251,25 +266,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($msg === '' && $action === 'cat_add' && !in_array($color, $palette, true)) {
             $msg = 'Please pick a color.';
         }
-        if ($msg === '' && $action === 'cat_rename' && ($orig === DEFAULT_CATEGORY || !isset($_SESSION['categories'][$orig]))) {
+        if ($msg === '' && $action === 'cat_rename' && ($orig === DEFAULT_CATEGORY || !isset($categories[$orig]))) {
             $msg = 'That category can\'t be renamed.';
         }
 
         if ($msg === '') {
             if ($action === 'cat_add') {
-                $_SESSION['categories'][$name] = $color;
+                $stmt = $pdo->prepare('INSERT INTO categories (name, color) VALUES (?, ?)');
+                $stmt->execute([$name, $color]);
                 $_SESSION['flash'] = ['type' => 'cat_added', 'title' => $name];        // success popup, like "Task created"
                 $back = ['manage' => null, 'rename' => null, 'delcat' => null];       // close the Manage dialog
             } else {
-                $renamed = [];                                            // rebuild so the order is kept
-                foreach ($_SESSION['categories'] as $k => $c) {
-                    $renamed[(string) $k === $orig ? $name : $k] = $c;
-                }
-                $_SESSION['categories'] = $renamed;
-                foreach ($_SESSION['tasks'] as &$t) {
-                    if ($t['cat'] === $orig) $t['cat'] = $name;
-                }
-                unset($t);
+                // Tasks point to the category by id, so they follow the new name automatically (no manual loop).
+                $stmt = $pdo->prepare('UPDATE categories SET name = ? WHERE name = ?');
+                $stmt->execute([$name, $orig]);
                 $_SESSION['flash'] = ['type' => 'cat_updated', 'title' => $name];     // success popup
                 $back = ['manage' => null, 'rename' => null, 'delcat' => null];       // close the Manage dialog
                 if (($_GET['cat'] ?? '') === $orig) $back['cat'] = $name;             // keep filtering by the renamed category
